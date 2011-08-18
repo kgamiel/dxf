@@ -1,12 +1,11 @@
 CUDA_ROOT=/usr/local/cuda
 
 # Linux
-#LIB=-L$(CUDA_ROOT)/lib64 -lcudart
+LIB=-L$(CUDA_ROOT)/lib64 -lcudart
 
 # OSX
-MAC_CFLAGS=#-framework OpenGL -framework GLUT 
-LIB=#-L$(CUDA_ROOT)/lib -lcudart -framework OpenGL -framework GLUT 
-#$(MAC_CFLAGS)
+#MAC_CFLAGS=#-framework OpenGL -framework GLUT 
+#LIB=#-L$(CUDA_ROOT)/lib -lcudart -framework OpenGL -framework GLUT 
 
 EXE=vdxf
 all: $(EXE) $(GTEST)
