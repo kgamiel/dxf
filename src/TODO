@@ -1,0 +1,3 @@
+Locale-based string tables
+Handle escaped ASCII control chars, ^ (see reference guide)
+
