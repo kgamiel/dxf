@@ -24,12 +24,13 @@ int main(int argc, char **argv) {
         dxf_print_last_error(&dxf);
         exit(EXIT_FAILURE);
     }
-    if(dxf_has_var(&dxf, argv[2])) {
-        printf("Has %s\n", argv[2]);
-    } else {
-        printf("Does NOT have %s\n", argv[2]);
+    if(argc == 3) {
+        if(dxf_has_var(&dxf, argv[2])) {
+            printf("Has %s\n", argv[2]);
+        } else {
+            printf("Does NOT have %s\n", argv[2]);
+        }
     }
-
     exit(EXIT_SUCCESS);
 }
 

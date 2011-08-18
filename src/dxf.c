@@ -228,14 +228,14 @@ static int dxf_parse_item(dxf_t *dxf, FILE *fp, char *value, int id) {
         if(i == DXF_MAX_LINE_LENGTH) {
             SET_ERROR(dxf, dxfErrorLineTooLong);
             return 0;
-        } else if(isascii((int)line[i]) != 1) {
+        } else if(isascii((int)line[i]) == 0) {
             SET_ERROR(dxf, dxfErrorNonASCII);
             return 0;
         }
 
         /* If id, must be all digits */
-        if((id == 1) && (isdigit(line[i]) != 1)) {
-            dxf->error.code = dxfErrorDigitExpected;
+        if((id == 1) && (isdigit(line[i]) == 0)) {
+            SET_ERROR(dxf, dxfErrorDigitExpected);
             return 0;
         } 
 

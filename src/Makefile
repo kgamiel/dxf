@@ -34,7 +34,7 @@ check:
 	nvcc $(CUDAFLAGS) -c $<
 
 $(LIBRARY):$(LIB_OBJ)
-	ar -cvq $(LIBRARY) $(LIB_OBJ)
+	ar -crv $(LIBRARY) $(LIB_OBJ)
 
 $(EXE):$(LIBRARY) $(EXE_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $(EXE_OBJ) -ldxf

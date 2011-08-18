@@ -9,13 +9,12 @@ void util_trim(char *s) {
 
     /* String valid? */
     assert(s != NULL);
-
     /* Loop over all characters, moving in-place as needed */
     for(i = 0; s[i] != '\0'; i++) {
         /* Which state are we in? */
         if(state == 0) {
             /* Leading state, do we have whitespace? */
-            if(isspace(s[i]) == 1) {
+            if(isspace(s[i]) != 0) {
                 /* Whitespace, continue */
                 continue;
             }
@@ -24,7 +23,7 @@ void util_trim(char *s) {
             state = 1;
         } else {
             /* Non-leading state, do we have whitespace? */
-            if(isspace(s[i]) == 1) {
+            if(isspace(s[i]) != 0) {
                 /* Whitespace, we're done */
                 s[i] = '\0';
                 break;
