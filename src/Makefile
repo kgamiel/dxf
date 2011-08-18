@@ -1,24 +1,26 @@
 CUDA_ROOT=/usr/local/cuda
 
 # Linux
-LIB=-L$(CUDA_ROOT)/lib64 -lcudart
+LIB=-L. #-L$(CUDA_ROOT)/lib64 -lcudart
 
 # OSX
-#MAC_CFLAGS=#-framework OpenGL -framework GLUT 
+#CFLAGS=-c90 
 #LIB=#-L$(CUDA_ROOT)/lib -lcudart -framework OpenGL -framework GLUT 
 
 EXE=vdxf
+LIBRARY=libdxf.a
+
 all: $(EXE) $(GTEST)
 
 #
 # Shouldn't need to change anything below this line
 #
 SRCS=util.c sdict.c dxf_types.c dxf.c vdxf.c
-COMMON_OBJ=util.o sdict.o dxf_types.o dxf.o 
-OBJ=vdxf.o $(COMMON_OBJ)
+LIB_OBJ=util.o sdict.o dxf_types.o dxf.o 
+EXE_OBJ=vdxf.o
 INC=-I/usr/local/cuda/include
 DEBUG=-g #-DNDEBUG
-CFLAGS=-c90 -Wall -Wextra -Wno-long-long -pedantic $(INC) $(DEBUG) $(MAC_CFLAGS)
+CFLAGS+=-Wall -Wextra -Wno-long-long -pedantic $(INC) $(DEBUG)
 CUDAFLAGS=--compiler-options "$(CFLAGS)" -m64 --ptxas-options=-v
 LDFLAGS=-g $(LIB)
 
@@ -31,11 +33,14 @@ check:
 .cu.o:
 	nvcc $(CUDAFLAGS) -c $<
 
-$(EXE):$(OBJ)
-	$(CC) $(LDFLAGS) -o $@ $(OBJ)
+$(LIBRARY):$(LIB_OBJ)
+	ar -cvq $(LIBRARY) $(LIB_OBJ)
+
+$(EXE):$(LIBRARY) $(EXE_OBJ)
+	$(CC) $(LDFLAGS) -o $@ $(EXE_OBJ) -ldxf
 
 clean:
-	rm -f *.o $(EXE)
+	rm -f *.o $(EXE) $(LIBRARY)
 
 doc:
 	doxygen
