@@ -1,7 +1,9 @@
 CUDA_ROOT=/usr/local/cuda
+GTK_ROOT=/opt/local/include/gtk-2.0
 
 # Linux
-LIB=-L. #-L$(CUDA_ROOT)/lib64 -lcudart
+LIB=-L. -L/opt/local/lib #-L$(CUDA_ROOT)/lib64 -lcudart
+CFLAGS=-I$(GTK_ROOT)
 
 # OSX
 #CFLAGS=-c90 
