@@ -28,7 +28,7 @@ LDFLAGS=-g $(LIB)
 
 check:
 	cppcheck *.c
-	splint -onlytrans -usereleased -compdestroy -temptrans -branchstate +posixlib *.c
+	splint -onlytrans -usereleased -compdestroy -temptrans -branchstate +posixlib -nullassign -nullstate -compdef -usedef *.c
 
 .SUFFIXES: .cu .cuh 
 

@@ -25,13 +25,92 @@ section ends with group code 0, ENDSEC
 #include "dxf_types.h"
 #include "util.h"
 
+/* Local prototypes */
+static dxf_error_code_t _dxf_load_fd(const dxf_handle_t dxf, int fd);
+
+/* Local structures */
+/*! @struct dxf_t
+    @brief DXF state information.
+
+    Maintains internal processing state.
+*/
+typedef struct _dxf_t {
+    dxf_error_t error; /**< Last error */
+    int line; /**< Current DXF line number being processed */
+    int column; /**< Current DXF column number being processed */
+    char filename[FILENAME_MAX]; /**< Filename, if available */
+    sdict_t *vars; /**< Header variables */
+} dxf_t;
+
+#define MAX_OPEN_DXF 1024
+
+/* This should be optimized */
+/* Internal map of handles to dxf_t structures.
+*/
+static dxf_t **g_handle_to_dxf = (dxf_t**)NULL; 
+static short g_init = 0;
+
+static void _dxf_init() {
+    if(g_init != 1) {
+        g_handle_to_dxf = (dxf_t**)calloc(MAX_OPEN_DXF, sizeof(dxf_t*));
+        assert(g_handle_to_dxf != NULL);
+        g_init = 1;
+    }
+}
+
+static void _dxf_cleanup() {
+    if(g_init == 1) {
+        dxf_handle_t handle;
+        for(handle = 0; handle < MAX_OPEN_DXF; handle++) {
+            if(g_handle_to_dxf[handle] != NULL) {
+                return;
+            }
+        }
+        free(g_handle_to_dxf);
+        g_handle_to_dxf = (dxf_t**)NULL;
+        g_init = 0;
+    }
+}
+
 extern int dxf_group_type_map[];
+
+static dxf_error_code_t dxf_get_registered(const dxf_handle_t handle,
+    dxf_t **dxf) {
+    if(g_handle_to_dxf[handle] != NULL) {
+        *dxf = g_handle_to_dxf[handle];
+        return dxfErrorOk;
+    }
+    return dxfErrorInvalidHandle;
+}
+
+static dxf_error_code_t dxf_unregister_handle(const dxf_handle_t handle) {
+    dxf_error_code_t err;
+    dxf_t *dxf;
+
+    if((err = dxf_get_registered(handle, &dxf)) != dxfErrorOk) {
+        return err;
+    }
+    free(dxf);
+    g_handle_to_dxf[handle] = (dxf_t*)NULL;
+    return dxfErrorOk;
+}
+
+static dxf_error_code_t dxf_register_handle(dxf_handle_t *handle, dxf_t **dxf) {
+    assert(dxf != NULL);
+    for((*handle) = 0; (*handle) < MAX_OPEN_DXF; ((*handle)++)) {
+        if(g_handle_to_dxf[(*handle)] == NULL) {
+            (*dxf) = (dxf_t*)calloc(1, sizeof(dxf_t));
+            assert((*dxf) != NULL);
+            g_handle_to_dxf[(*handle)] = (*dxf);
+            return dxfErrorOk;
+        }
+    }
+
+    return dxfErrorTooManyOpen;
+}
 
 /* Max line length according to DXF manual, not including NL */
 #define DXF_MAX_LINE_LENGTH 2049
-#define DXF_RESET_ERROR(a) a->error.code = dxfErrorOk;a->error.msg[0] = '\0';
-#define DXF_RESET(a) DXF_RESET_ERROR(a);a->line=0;a->column=0;\
-    a->filename[0]='\0';
 #define SET_ERROR(dxf, c) dxf->error.code = c;(void)snprintf(dxf->error.msg, \
     sizeof(dxf->error.msg), "%s", DXF_ERROR_S[dxf->error.code]);
 #define SET_ERRNO_ERROR(dxf, c) SET_ERROR(dxf, c); \
@@ -51,8 +130,15 @@ static char *DXF_ERROR_S[] = {
     "Invalid file",
     "Open failed",
     "Close failed",
-    "Snprintf failed"
+    "Snprintf failed",
+    "Too many open DXF files",
+    "Invalid DXF handle"
 };
+
+dxf_error_code_t dxf_print_error(const dxf_error_code_t code, FILE *fp) {
+    fprintf(fp, "%s", DXF_ERROR_S[code]);
+    return dxfErrorOk;
+}
 
 typedef struct _range_to_type_t {
     int start;
@@ -281,47 +367,53 @@ static int dxf_parse_record(dxf_t *dxf, FILE *fp, int *group_code,
 /**
 Attempts to load a DXF file by filename.
 
-@param  dxf DXF state structure.
+@param  handle  DXF handle.
 @param  filename    Filename.
-@returns 1 on success, 0 on error.
+@returns On success, handle will contain a valid handle for use in future API
+calls and dxfErrorOk is returned.  On failure, handle is undefined and a
+relevant error code is returned.
 */
-int dxf_load(dxf_t *dxf, const char *filename) {
+dxf_error_code_t dxf_load(dxf_handle_t *handle, const char *filename) {
     struct stat statbuf; /* Struct for stat() call */
     int fd; /* File descriptor */
+    dxf_t *dxf;
+    dxf_error_code_t err;
 
-    /* Is the structure valid? */
-    assert(dxf != NULL);
+    _dxf_init();
 
-    /* Is filename a valid string? */
+    /* Make sure we have a non-NULL location for handle */
+    assert(handle != NULL);
+
+    /* Is filename non-NULL? */
     assert(filename != NULL);
-
-    /* Reset structures for new load */
-    DXF_RESET(dxf);
 
     /* Does file exist? */
     if(stat(filename, &statbuf) == -1) {
-        SET_ERRNO_ERROR(dxf, dxfErrorInvalidFile);
-        return 0;
+        return dxfErrorInvalidFile;
     }
 
     /* Open file for reading */
     if((fd = open(filename, O_RDONLY)) == -1) {
-        SET_ERRNO_ERROR(dxf, dxfErrorOpenFailed);
-        return 0;
+        return dxfErrorOpenFailed;
+    }
+
+    /* Register a new handle and internal data structure */
+    if((err = dxf_register_handle(handle, &dxf)) != dxfErrorOk) {
+        (void)close(fd);
+        return err;
     }
 
     /* Load the DXF file */
-    if(dxf_load_fd(dxf, fd) != 1) {
-        return 0;
+    if((err = _dxf_load_fd((*handle), fd)) != dxfErrorOk) {
+        (void)close(fd);
+        dxf_unload((*handle));
+        return err;
     }
 
     /* Close the file */
-    if(close(fd) == -1) {
-        SET_ERRNO_ERROR(dxf, dxfErrorCloseFailed);
-        return 0;
-    }
+    (void)close(fd);
 
-    return 1;
+    return dxfErrorOk;
 }
 
 /**
@@ -329,29 +421,29 @@ Attempts to load a DXF from an open file descriptor.
 
 @param  dxf DXF state structure.
 @param  fd  File descriptor open and set to beginning of DXF stream.
-@returns 1 on success, 0 on error.
+@returns dxfErrorOk on success, 0 on error.
 */
-int dxf_load_fd(dxf_t *dxf, int fd) {
+static dxf_error_code_t _dxf_load_fd(const dxf_handle_t handle, int fd) {
     FILE *fp;   /* file pointer for stream functions */
     int state = 0;
     char cur_section[DXF_MAX_LINE_LENGTH + 1];
+    dxf_t *dxf;
+    dxf_error_code_t err;
 
-    /* Is the structure valid? */
-    assert(dxf != NULL);
+    if((err = dxf_get_registered(handle, &dxf)) != dxfErrorOk) {
+        return err;
+    }
 
     /* valid file descriptor? */
     if(fcntl(fd, F_GETFL) == -1) {
         SET_ERRNO_ERROR(dxf, dxfErrorBadFd);
-        return 0;
+        return dxf->error.code;
     }
-
-    /* Reset structures for new load */
-    DXF_RESET(dxf);
 
     /* Get a stream pointer from fd */
     if((fp = fdopen(fd, "r")) == NULL) {
         SET_ERRNO_ERROR(dxf, dxfErrorBadFd);
-        return 0;
+        return dxf->error.code;
     }
 
     /* Prepare the header variable dictionary */
@@ -367,19 +459,21 @@ int dxf_load_fd(dxf_t *dxf, int fd) {
         value[0] = '\0';
         if(dxf_parse_record(dxf, fp, &group_code, value) == 0) {
             if(dxf->error.code == dxfErrorEOF) {
-                return 1;
+                return dxfErrorOk;
             }
             /* Error */
-            return 0;
+            return dxf->error.code;
         }
-        /*printf("cur_section=%s\n", cur_section);*/
-        /*if(group_code == 9) {
+        /*
+        printf("cur_section=%s\n", cur_section);
+        if(group_code == 9) {
             printf("%s\n", cur_section);
-        }*/
-        /*printf("%i: type=%i\n", group_code, dxf_group_type_map[group_code]);*/
-        /*if(group_code == 0) {
+        }
+        printf("%i: type=%i\n", group_code, dxf_group_type_map[group_code]);
+        if(group_code == 0) {
             printf("%i: %s\n", group_code, value);
-        }*/
+        }
+        */
         switch(state) {
             case 0:
                 if((group_code == 0) && (strcmp(value, "SECTION") == 0)) {
@@ -389,12 +483,12 @@ int dxf_load_fd(dxf_t *dxf, int fd) {
             case 1:
                 if(group_code != 2) {
                     /* Error */
-                    return 0;
+                    return dxf->error.code;
                 }
                 if(snprintf(cur_section, sizeof(cur_section), "%s", value) !=
                     (int)strlen(value)) {
                     SET_ERROR(dxf, dxfErrorSnprintfFailed);
-                    return 0;
+                    return dxf->error.code;
                 }
                 if(strcasecmp(cur_section, "HEADER")) {
                 }
@@ -415,7 +509,7 @@ int dxf_load_fd(dxf_t *dxf, int fd) {
                 break;
         }
     }
-    return 1;
+    return dxfErrorOk;
 }
 
 /**
@@ -426,9 +520,14 @@ Copies last error detail into provided structure.
 @param  error DXF error structure.
 @returns 1 on success, 0 on error.
 */
-int dxf_get_last_error(dxf_t *dxf, dxf_error_t *error) {
-    /* Is the structure valid? */
-    assert(dxf != NULL);
+dxf_error_code_t dxf_get_last_error(const dxf_handle_t handle, dxf_error_t
+    *error) {
+    dxf_t *dxf;
+    dxf_error_code_t err;
+
+    if((err = dxf_get_registered(handle, &dxf)) != dxfErrorOk) {
+        return err;
+    }
 
     /* Is the error structure valid? */
     assert(error != NULL);
@@ -437,7 +536,7 @@ int dxf_get_last_error(dxf_t *dxf, dxf_error_t *error) {
     error->code = dxf->error.code;
     memcpy(error->msg, dxf->error.msg, sizeof(error->msg));
 
-    return 1;
+    return dxfErrorOk;
 }
 
 /**
@@ -446,9 +545,13 @@ Convenience function that prints details of the last error to stderr.
 
 @param  dxf DXF state structure.
 */
-void dxf_print_last_error(dxf_t *dxf) {
-    /* Is the structure valid? */
-    assert(dxf != NULL);
+dxf_error_code_t dxf_print_last_error(const dxf_handle_t handle) {
+    dxf_t *dxf;
+    dxf_error_code_t err;
+
+    if((err = dxf_get_registered(handle, &dxf)) != dxfErrorOk) {
+        return err;
+    }
 
     /* Print the error to stderr */
     fprintf(stderr, "DXF Error:\n" \
@@ -457,15 +560,47 @@ void dxf_print_last_error(dxf_t *dxf) {
         "\tline:\t%i\n" \
         "\tcolumn:\t%i\n",
         dxf->error.code, dxf->error.msg, dxf->line, dxf->column);
+
+    return dxfErrorOk;
 }
 
-int dxf_has_var(dxf_t *dxf, const char *name) {
-    /* Is the structure valid? */
-    assert(dxf != NULL);
+dxf_error_code_t dxf_has_var(const dxf_handle_t handle, const char *name) {
+    dxf_t *dxf;
+    dxf_error_code_t err;
+
+    if((err = dxf_get_registered(handle, &dxf)) != dxfErrorOk) {
+        return err;
+    }
 
     /* Is the key valid? */
     assert((name != NULL) && (*name != '\0'));
 
-    return sdict_has(dxf->vars, name);
+    if(sdict_has(dxf->vars, name) == 1) {
+        return dxfErrorOk;
+    }
+
+    return dxfErrorInvalidVariable;
 }
 
+/**
+Unload resources and free the handle.
+
+@param  dxf dxf handle.
+@returns dxfErrorOk on success, error code otherwise.
+*/
+dxf_error_code_t dxf_unload(const dxf_handle_t handle) {
+    dxf_t *dxf;
+    dxf_error_code_t err;
+
+    if((err = dxf_get_registered(handle, &dxf)) != dxfErrorOk) {
+        return err;
+    }
+    if(dxf->vars != NULL) {
+        sdict_destroy(dxf->vars);
+    }
+
+    err = dxf_unregister_handle(handle);
+    _dxf_cleanup();
+
+    return err;
+}

@@ -22,12 +22,16 @@
 #include "dxf.h"
 
 int main(int argc, char **argv) {
-    dxf_t dxf;
-    memset(&dxf, 0, sizeof(dxf_t));
-    if(dxf_load(&dxf, argv[1]) != dxfTrue) {
-        dxf_print_last_error(&dxf);
+    dxf_handle_t dxf;
+    dxf_error_code_t err;
+
+    if((err = dxf_load(&dxf, argv[1])) != dxfErrorOk) {
+        dxf_print_error(err, stderr);
         exit(EXIT_FAILURE);
     }
+    ...
+    (void)dxf_unload(dxf);
+
     exit(EXIT_SUCCESS);
 }
  * \endcode 
@@ -37,6 +41,11 @@ int main(int argc, char **argv) {
 
 #include "util.h"
 #include "sdict.h"
+
+/**
+Handle required by API calls.
+*/
+typedef unsigned int dxf_handle_t;
 
 /** 
  * All possible error values.
@@ -54,7 +63,10 @@ typedef enum {
     dxfErrorInvalidFile, /**< Invalid filename. */
     dxfErrorOpenFailed, /**< Failed to open file. */
     dxfErrorCloseFailed, /**< Failed to close file. */
-    dxfErrorSnprintfFailed /**< Failed to copy data. */
+    dxfErrorSnprintfFailed,/**< Failed to copy data. */
+    dxfErrorTooManyOpen, /**< Too many dxf files open. */
+    dxfErrorInvalidHandle, /**< Invalid handle. */
+    dxfErrorInvalidVariable /**< Invalid variable. */
 } dxf_error_code_t;
 
 /**
@@ -66,25 +78,14 @@ typedef struct _dxf_error_t {
     char msg[FILENAME_MAX * 2]; /**< Error message */
 } dxf_error_t;
 
-/*! @struct dxf_t
-    @brief DXF state information.
-
-    Maintains internal processing state.
-*/
-typedef struct _dxf_t {
-    dxf_error_t error; /**< Last error */
-    int line; /**< Current DXF line number being processed */
-    int column; /**< Current DXF column number being processed */
-    char filename[FILENAME_MAX]; /**< Filename, if available */
-    sdict_t *vars; /**< Header variables */
-} dxf_t;
-
 /* API functions */
-int dxf_load(dxf_t *dxf, const char *filename);
-int dxf_load_fd(dxf_t *dxf, int fd);
-int dxf_get_last_error(dxf_t *dxf, dxf_error_t *error);
-int dxf_has_var(dxf_t *dxf, const char *name);
-void dxf_print_last_error(dxf_t *dxf);
+dxf_error_code_t dxf_load(dxf_handle_t *handle, const char *filename);
+dxf_error_code_t dxf_unload(dxf_handle_t handle);
+dxf_error_code_t dxf_get_last_error(const dxf_handle_t handle,
+    dxf_error_t *error);
+dxf_error_code_t dxf_has_var(const dxf_handle_t handle, const char *name);
+dxf_error_code_t dxf_print_last_error(const dxf_handle_t handle);
+dxf_error_code_t dxf_print_error(const dxf_error_code_t code, FILE *fp);
 
 #endif
 
