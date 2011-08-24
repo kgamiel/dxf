@@ -1,6 +1,6 @@
-- remove sdict and depends
-- autoconf installation
-- Locale-based string tables
+X  - remove sdict and depends
 - Handle escaped ASCII control chars, ^ (see reference guide)
-- separate code generation into a separate utility
+- separate code generation into a separate utility (?)
 
+- autoconf installation
+- Locale-based string tables(?)
