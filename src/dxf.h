@@ -40,7 +40,6 @@ int main(int argc, char **argv) {
 #define _DXF_H_
 
 #include "util.h"
-#include "sdict.h"
 
 /**
 Handle required by API calls.
@@ -67,25 +66,28 @@ typedef enum {
     dxfErrorTooManyOpen, /**< Too many dxf files open. */
     dxfErrorInvalidHandle, /**< Invalid handle. */
     dxfErrorInvalidVariable /**< Invalid variable. */
-} dxf_error_code_t;
+} dxf_error_t;
 
 /**
  * Error details.
  * Details of an error.
  */
 typedef struct _dxf_error_t {
-    dxf_error_code_t code; /**< Error code */
+    dxf_error_t code; /**< Error code */
     char msg[FILENAME_MAX * 2]; /**< Error message */
-} dxf_error_t;
+} dxf_error_detail_t;
 
 /* API functions */
-dxf_error_code_t dxf_load(dxf_handle_t *handle, const char *filename);
-dxf_error_code_t dxf_unload(dxf_handle_t handle);
-dxf_error_code_t dxf_get_last_error(const dxf_handle_t handle,
-    dxf_error_t *error);
-dxf_error_code_t dxf_has_var(const dxf_handle_t handle, const char *name);
-dxf_error_code_t dxf_print_last_error(const dxf_handle_t handle);
-dxf_error_code_t dxf_print_error(const dxf_error_code_t code, FILE *fp);
+dxf_error_t dxf_load(dxf_handle_t *handle, const char *filename);
+dxf_error_t dxf_unload(dxf_handle_t handle);
+dxf_error_t dxf_print(dxf_handle_t handle, FILE *fp);
+
+dxf_error_t dxf_has_var(const dxf_handle_t handle, const char *name);
+
+dxf_error_t dxf_get_last_error(const dxf_handle_t handle,
+    dxf_error_detail_t *error);
+dxf_error_t dxf_print_last_error(const dxf_handle_t handle);
+dxf_error_t dxf_print_error(const dxf_error_t code, FILE *fp);
 
 #endif
 

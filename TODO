@@ -1,4 +1,6 @@
-autoconf installation
-Locale-based string tables
-Handle escaped ASCII control chars, ^ (see reference guide)
+- remove sdict and depends
+- autoconf installation
+- Locale-based string tables
+- Handle escaped ASCII control chars, ^ (see reference guide)
+- separate code generation into a separate utility
 

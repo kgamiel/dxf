@@ -14,6 +14,7 @@ typedef struct _sdict_node_t {
     char terminal;
     struct _sdict_node_t *children;
     struct _sdict_node_t *next;
+    struct _sdict_node_t *parent;
     void *value;
 } sdict_node_t;
 
@@ -30,6 +31,7 @@ int sdict_destroy(sdict_t *s);
 int sdict_set(sdict_t *s, const char *key, void *value);
 int sdict_get(sdict_t *s, const char *key, void **value);
 int sdict_has(sdict_t *s, const char *key);
+void sdict_print_node(sdict_node_t *n);
 
 #endif
 

@@ -17,8 +17,8 @@ all: $(EXE) $(GTEST)
 #
 # Shouldn't need to change anything below this line
 #
-SRCS=util.c sdict.c dxf_types.c dxf.c vdxf.c
-LIB_OBJ=util.o sdict.o dxf_types.o dxf.o 
+SRCS=util.c dxf_types.c dxf.c vdxf.c
+LIB_OBJ=util.o dxf_types.o dxf.o 
 EXE_OBJ=vdxf.o
 INC=-I/usr/local/cuda/include
 DEBUG=-g #-DNDEBUG
@@ -52,7 +52,6 @@ depend:
 
 # DO NOT DELETE
 
-sdict.o: sdict.h
 dxf_types.o: dxf_types.h
 dxf.o: dxf.h util.h dxf_types.h
-vdxf.o: dxf.h util.h sdict.h
+vdxf.o: dxf.h util.h

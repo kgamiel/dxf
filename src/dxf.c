@@ -26,7 +26,7 @@ section ends with group code 0, ENDSEC
 #include "util.h"
 
 /* Local prototypes */
-static dxf_error_code_t _dxf_load_fd(const dxf_handle_t dxf, int fd);
+static dxf_error_t _dxf_load_fd(const dxf_handle_t dxf, int fd);
 
 /* Local structures */
 /*! @struct dxf_t
@@ -35,11 +35,10 @@ static dxf_error_code_t _dxf_load_fd(const dxf_handle_t dxf, int fd);
     Maintains internal processing state.
 */
 typedef struct _dxf_t {
-    dxf_error_t error; /**< Last error */
+    dxf_error_detail_t error; /**< Last error */
     int line; /**< Current DXF line number being processed */
     int column; /**< Current DXF column number being processed */
     char filename[FILENAME_MAX]; /**< Filename, if available */
-    sdict_t *vars; /**< Header variables */
 } dxf_t;
 
 #define MAX_OPEN_DXF 1024
@@ -74,7 +73,7 @@ static void _dxf_cleanup() {
 
 extern int dxf_group_type_map[];
 
-static dxf_error_code_t dxf_get_registered(const dxf_handle_t handle,
+static dxf_error_t dxf_get_registered(const dxf_handle_t handle,
     dxf_t **dxf) {
     if(g_handle_to_dxf[handle] != NULL) {
         *dxf = g_handle_to_dxf[handle];
@@ -83,8 +82,8 @@ static dxf_error_code_t dxf_get_registered(const dxf_handle_t handle,
     return dxfErrorInvalidHandle;
 }
 
-static dxf_error_code_t dxf_unregister_handle(const dxf_handle_t handle) {
-    dxf_error_code_t err;
+static dxf_error_t dxf_unregister_handle(const dxf_handle_t handle) {
+    dxf_error_t err;
     dxf_t *dxf;
 
     if((err = dxf_get_registered(handle, &dxf)) != dxfErrorOk) {
@@ -95,7 +94,7 @@ static dxf_error_code_t dxf_unregister_handle(const dxf_handle_t handle) {
     return dxfErrorOk;
 }
 
-static dxf_error_code_t dxf_register_handle(dxf_handle_t *handle, dxf_t **dxf) {
+static dxf_error_t dxf_register_handle(dxf_handle_t *handle, dxf_t **dxf) {
     assert(dxf != NULL);
     for((*handle) = 0; (*handle) < MAX_OPEN_DXF; ((*handle)++)) {
         if(g_handle_to_dxf[(*handle)] == NULL) {
@@ -135,7 +134,7 @@ static char *DXF_ERROR_S[] = {
     "Invalid DXF handle"
 };
 
-dxf_error_code_t dxf_print_error(const dxf_error_code_t code, FILE *fp) {
+dxf_error_t dxf_print_error(const dxf_error_t code, FILE *fp) {
     fprintf(fp, "%s", DXF_ERROR_S[code]);
     return dxfErrorOk;
 }
@@ -373,11 +372,11 @@ Attempts to load a DXF file by filename.
 calls and dxfErrorOk is returned.  On failure, handle is undefined and a
 relevant error code is returned.
 */
-dxf_error_code_t dxf_load(dxf_handle_t *handle, const char *filename) {
+dxf_error_t dxf_load(dxf_handle_t *handle, const char *filename) {
     struct stat statbuf; /* Struct for stat() call */
     int fd; /* File descriptor */
     dxf_t *dxf;
-    dxf_error_code_t err;
+    dxf_error_t err;
 
     _dxf_init();
 
@@ -412,7 +411,6 @@ dxf_error_code_t dxf_load(dxf_handle_t *handle, const char *filename) {
 
     /* Close the file */
     (void)close(fd);
-
     return dxfErrorOk;
 }
 
@@ -423,12 +421,12 @@ Attempts to load a DXF from an open file descriptor.
 @param  fd  File descriptor open and set to beginning of DXF stream.
 @returns dxfErrorOk on success, 0 on error.
 */
-static dxf_error_code_t _dxf_load_fd(const dxf_handle_t handle, int fd) {
+static dxf_error_t _dxf_load_fd(const dxf_handle_t handle, int fd) {
     FILE *fp;   /* file pointer for stream functions */
     int state = 0;
     char cur_section[DXF_MAX_LINE_LENGTH + 1];
     dxf_t *dxf;
-    dxf_error_code_t err;
+    dxf_error_t err;
 
     if((err = dxf_get_registered(handle, &dxf)) != dxfErrorOk) {
         return err;
@@ -447,7 +445,6 @@ static dxf_error_code_t _dxf_load_fd(const dxf_handle_t handle, int fd) {
     }
 
     /* Prepare the header variable dictionary */
-    dxf->vars = sdict_create();
     assert(dxf->vars != NULL);
 
     /* Loop through and parse every DXF record */
@@ -503,7 +500,8 @@ static dxf_error_code_t _dxf_load_fd(const dxf_handle_t handle, int fd) {
                 if(!strcmp(cur_section, "HEADER")) {
                     if(group_code == 9) {
                         /* create a data element to add */
-                        sdict_set(dxf->vars, value, NULL);
+                        /* value contains a header variable */
+                        printf("%s\n", value);
                     }
                 }
                 break;
@@ -520,10 +518,10 @@ Copies last error detail into provided structure.
 @param  error DXF error structure.
 @returns 1 on success, 0 on error.
 */
-dxf_error_code_t dxf_get_last_error(const dxf_handle_t handle, dxf_error_t
+dxf_error_t dxf_get_last_error(const dxf_handle_t handle, dxf_error_detail_t
     *error) {
     dxf_t *dxf;
-    dxf_error_code_t err;
+    dxf_error_t err;
 
     if((err = dxf_get_registered(handle, &dxf)) != dxfErrorOk) {
         return err;
@@ -545,9 +543,9 @@ Convenience function that prints details of the last error to stderr.
 
 @param  dxf DXF state structure.
 */
-dxf_error_code_t dxf_print_last_error(const dxf_handle_t handle) {
+dxf_error_t dxf_print_last_error(const dxf_handle_t handle) {
     dxf_t *dxf;
-    dxf_error_code_t err;
+    dxf_error_t err;
 
     if((err = dxf_get_registered(handle, &dxf)) != dxfErrorOk) {
         return err;
@@ -564,9 +562,9 @@ dxf_error_code_t dxf_print_last_error(const dxf_handle_t handle) {
     return dxfErrorOk;
 }
 
-dxf_error_code_t dxf_has_var(const dxf_handle_t handle, const char *name) {
+dxf_error_t dxf_has_var(const dxf_handle_t handle, const char *name) {
     dxf_t *dxf;
-    dxf_error_code_t err;
+    dxf_error_t err;
 
     if((err = dxf_get_registered(handle, &dxf)) != dxfErrorOk) {
         return err;
@@ -574,10 +572,6 @@ dxf_error_code_t dxf_has_var(const dxf_handle_t handle, const char *name) {
 
     /* Is the key valid? */
     assert((name != NULL) && (*name != '\0'));
-
-    if(sdict_has(dxf->vars, name) == 1) {
-        return dxfErrorOk;
-    }
 
     return dxfErrorInvalidVariable;
 }
@@ -588,15 +582,12 @@ Unload resources and free the handle.
 @param  dxf dxf handle.
 @returns dxfErrorOk on success, error code otherwise.
 */
-dxf_error_code_t dxf_unload(const dxf_handle_t handle) {
+dxf_error_t dxf_unload(const dxf_handle_t handle) {
     dxf_t *dxf;
-    dxf_error_code_t err;
+    dxf_error_t err;
 
     if((err = dxf_get_registered(handle, &dxf)) != dxfErrorOk) {
         return err;
-    }
-    if(dxf->vars != NULL) {
-        sdict_destroy(dxf->vars);
     }
 
     err = dxf_unregister_handle(handle);
@@ -604,3 +595,15 @@ dxf_error_code_t dxf_unload(const dxf_handle_t handle) {
 
     return err;
 }
+
+dxf_error_t dxf_print(dxf_handle_t handle, FILE *fp) {
+    dxf_t *dxf;
+    dxf_error_t err;
+
+    if((err = dxf_get_registered(handle, &dxf)) != dxfErrorOk) {
+        return err;
+    }
+
+    return dxfErrorOk;
+}
+

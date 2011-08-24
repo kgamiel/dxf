@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <string.h>
 #include "sdict.h"
+#include "util.h"
 
 /**
 Create a new node.
@@ -78,6 +79,7 @@ static int sdict_node_set(sdict_node_t *n, const char *key, int key_len, int
     if(n->children == NULL) {
         /* First child of n */
         n->children = sdict_node_create(c);
+        n->children->parent = n;
         cur_node = n->children;
     } else {
         /* Not first child, scan list for matching child */
@@ -93,6 +95,7 @@ static int sdict_node_set(sdict_node_t *n, const char *key, int key_len, int
             }
         }
     }
+    cur_node->parent = n;
     /* Are we done with this key? */
     if(key_len > (index + 1)) {
         /* No, more chars in key */
@@ -178,4 +181,37 @@ int sdict_has(sdict_t *s, const char *key) {
         return (int)n->terminal;
     } 
     return 0;
+}
+
+void sdict_print(sdict_node_t *n, char *value, int value_len) {
+    sdict_node_t *x;
+    char s[8192];
+    int i = sizeof(s) - 1;
+    memset(s, 0x20, sizeof(s));
+    for(x=n; x->parent != NULL;x = x->parent) {
+        s[i--] = x->c;
+    }
+    util_trim(s);
+    snprintf(value, value_len, "%s", s);
+}
+
+void sdict_print_node(sdict_node_t *n) {
+    sdict_node_t *cur_node = n;
+
+    assert(n != NULL);
+
+    if(n->children == NULL) {
+        return;
+    } else {
+        for(cur_node = n->children;cur_node!= NULL; cur_node = cur_node->next) {
+            if(cur_node->terminal == (char)1) {
+                char buf[8192];
+                sdict_print(cur_node, buf, sizeof(buf));
+                printf("%s\n", buf);
+            } else {
+                /* Keep looking */
+                sdict_print_node(cur_node);
+            }
+        }
+    }
 }

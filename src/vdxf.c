@@ -4,7 +4,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include "dxf.h"
-#include "sdict.h"
 
 int main(int argc, char **argv) {
     int i;
@@ -18,7 +17,7 @@ int main(int argc, char **argv) {
 
     for(i = 1;i < argc; i++) {
         dxf_handle_t dxf; /* API handle */
-        dxf_error_code_t err; /* error code */
+        dxf_error_t err; /* error code */
         printf("loading %s...\n", argv[i]);
         /* Load the DXF file */
         if((err = dxf_load(&dxf, argv[i])) != dxfErrorOk) {
@@ -33,7 +32,7 @@ int main(int argc, char **argv) {
 
 int xmain(int argc, char **argv) {
     dxf_handle_t dxf; /* API handle */
-    dxf_error_code_t err; /* error code */
+    dxf_error_t err; /* error code */
 
     /* Do we have 2 parameters? */
     if(argc < 2) {
