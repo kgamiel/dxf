@@ -27,10 +27,6 @@ section ends with group code 0, ENDSEC
 
 /* Max line length according to DXF manual, not including NL */
 #define DXF_MAX_LINE_LENGTH 2049
-#define DXF_MAX_SECTIONS 64
-#define DXF_MAX_VARIABLES 512
-#define DXF_MAX_SECTION_NAME 64
-#define DXF_MAX_VARIABLE_NAME 64
 
 /* Local prototypes */
 static dxf_error_t _dxf_load_fd(const dxf_handle_t dxf, int fd);
@@ -38,7 +34,7 @@ static dxf_error_t _dxf_load_fd(const dxf_handle_t dxf, int fd);
 /* Local structures */
 
 typedef struct _var_t {
-    char name[DXF_MAX_VARIABLE_NAME];
+    char *name;
     int type;
     union {
         char *c;
@@ -50,7 +46,7 @@ typedef struct _var_t {
 typedef struct _section_t {
     int start;
     int end;
-    char name[DXF_MAX_SECTION_NAME];
+    char *name;
 } section_t;
 
 /*! @struct dxf_t
@@ -63,7 +59,7 @@ typedef struct _dxf_t {
     int line; /**< Current DXF line number being processed */
     int column; /**< Current DXF column number being processed */
     char filename[FILENAME_MAX]; /**< Filename, if available */
-    section_t section[DXF_MAX_SECTIONS]; /**< Sections */
+    section_t *section; /**< Sections */
     int section_cnt;
     var_t *variable;
     int variable_cnt;
@@ -77,8 +73,7 @@ static void _dxf_add_variable(dxf_t *dxf, const char *name, int type,
 
     dxf->variable = (var_t*)realloc(dxf->variable, (sizeof(var_t) * 
         (dxf->variable_cnt + 1)));
-    snprintf(dxf->variable[dxf->variable_cnt].name, DXF_MAX_VARIABLE_NAME,
-        "%s", name);
+    dxf->variable[dxf->variable_cnt].name = strdup(name);
     dxf->variable[dxf->variable_cnt].type = type;
     /* do the right thing based on type, this is char* example */
     if((value != NULL) && (*value != '\0')) {
@@ -133,10 +128,29 @@ static dxf_error_t dxf_get_registered(const dxf_handle_t handle,
 static dxf_error_t dxf_unregister_handle(const dxf_handle_t handle) {
     dxf_error_t err;
     dxf_t *dxf;
+    int i;
 
     if((err = dxf_get_registered(handle, &dxf)) != dxfErrorOk) {
         return err;
     }
+
+    if(dxf->section != NULL) {
+        for(i = 0; i < dxf->section_cnt; i++) {
+            free(dxf->section[i].name);
+        }
+        free(dxf->section);
+    }
+
+    if(dxf->variable != NULL) {
+        for(i = 0; i < dxf->variable_cnt; i++) {
+            free(dxf->variable[i].name);
+            if(dxf->variable[i].value.c != NULL) {
+                free(dxf->variable[i].value.c);
+            }
+        }
+        free(dxf->variable);
+    }
+
     free(dxf);
     g_handle_to_dxf[handle] = (dxf_t*)NULL;
     return dxfErrorOk;
@@ -578,10 +592,11 @@ static dxf_error_t _dxf_load_fd(const dxf_handle_t handle, int fd) {
                 if((group_code == 0) && (strcmp(value, "ENDSEC") == 0)) {
                     state = S_PRE_SECTION;
                     section_end = dxf->line;
+                    dxf->section = (section_t*)realloc(dxf->section,
+                        (sizeof(section_t) * (dxf->section_cnt + 1)));
                     dxf->section[dxf->section_cnt].start = section_start;
                     dxf->section[dxf->section_cnt].end = section_end;
-                    snprintf(dxf->section[dxf->section_cnt].name, sizeof(
-                        dxf->section[0].name), "%s", cur_section);
+                    dxf->section[dxf->section_cnt].name = strdup(cur_section);
                     dxf->section_cnt++;
                     break;
                 }
